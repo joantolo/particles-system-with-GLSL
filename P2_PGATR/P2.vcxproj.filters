@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{5733b9ec-8bbc-47f2-ba7e-82b2f9eb2ce9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{d4b021aa-a807-4ac5-823f-17c6776d938f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\shaders\fwRendering.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\fwRendering.vert">
+      <Filter>shaders</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\scr\auxiliar.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scr\main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\scr\auxiliar.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scr\BOX.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scr\PLANE.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
