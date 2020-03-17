@@ -27,29 +27,34 @@
 
 //VAO
 unsigned int vao;
-
+unsigned int posSSbo;
+unsigned int velSSbo;
 
 //VBOs que forman parte del objeto
 unsigned int posVBO;
 unsigned int colorVBO;
-unsigned int normalVBO;
+unsigned int colorVBO;
 unsigned int texCoordVBO;
 unsigned int triangleIndexVBO;
 
+///////////
+//Compute
+///////////
+unsigned int computeShader;
+unsigned int computeProgram;
 
 ///////////
 //Forward-rendering
 ///////////
 unsigned int forwardVShader;
+unsigned int forwardGShader;
 unsigned int forwardFShader;
-unsigned int forwardTCShader;
-unsigned int forwardTEShader;
 unsigned int forwardProgram;
 
 //Atributos
 int inPos;
 int inColor;
-int inNormal;
+int inColor;
 int inTexCoord;
 
 //Matrices Uniform
@@ -92,7 +97,6 @@ float projNear, projFar;
 //Posicion de la luz
 glm::vec4 lightPos;
 
-
 //////////////////////////////////////////////////////////////
 // Funciones auxiliares
 //////////////////////////////////////////////////////////////
@@ -108,11 +112,10 @@ void renderObject();
 //Funciones de inicialización y destrucción
 void initContext(int argc, char** argv);
 void initOGL();
-void initShaderFw(const char* vname, const char* fname);
-void initObj(const char* filename);
-void initPlane();
+void initShaderCompute(const char* cname);
+void initShaderFw(const char* vname, const char* gname, const char* fname);
+void initParticles(const char* filename);
 void destroy();
-
 
 //Carga el shader indicado, devuele el ID del shader
 GLuint loadShader(const char* fileName, GLenum type);
@@ -128,9 +131,10 @@ int main(int argc, char** argv)
 	initContext(argc, argv);
 	initOGL();
 
-	initShaderFw("../shaders/fwRendering.vert", "../shaders/fwRendering.frag");
+	initShaderCompute("../shaders/particleIntegrator.comp");
+	initShaderFw("../shaders/fwRendering.vert", "../shaders/computeRendering.geom", "../shaders/fwRendering.frag");
 
-	initObj("../models/box.obj");
+	initParticles("../models/box.obj");
 
 	glutMainLoop();
 
@@ -193,20 +197,21 @@ void initOGL()
 	//Inicializamos la cámara
 	view = glm::lookAt(glm::vec3(0, 0, cameraStartingDistance), glm::vec3(0), glm::vec3(0, 1, 0));
 	moveCam = false;
-
 }
 
 void destroy()
 {
 	glDetachShader(forwardProgram, forwardVShader);
 	glDetachShader(forwardProgram, forwardFShader);
+	glDetachShader(forwardProgram, forwardGShader);
 	glDeleteShader(forwardVShader);
 	glDeleteShader(forwardFShader);
+	glDeleteShader(forwardGShader);
 	glDeleteProgram(forwardProgram);
 
 	if (inPos != -1) glDeleteBuffers(1, &posVBO);
 	if (inColor != -1) glDeleteBuffers(1, &colorVBO);
-	if (inNormal != -1) glDeleteBuffers(1, &normalVBO);
+	if (inColor != -1) glDeleteBuffers(1, &colorVBO);
 	if (inTexCoord != -1) glDeleteBuffers(1, &texCoordVBO);
 
 	glDeleteBuffers(1, &triangleIndexVBO);
@@ -215,16 +220,45 @@ void destroy()
 
 	glDeleteTextures(1, &colorTexId);
 	glDeleteTextures(1, &emiTexId);
-
 }
 
-void initShaderFw(const char* vname, const char* fname)
+void initShaderCompute(const char* cname)
+{
+	computeShader = loadShader(cname, GL_COMPUTE_SHADER);
+
+	computeProgram = glCreateProgram();
+	glAttachShader(computeProgram, computeShader);
+
+	glLinkProgram(computeProgram);
+
+	int linked;
+	glGetProgramiv(computeProgram, GL_LINK_STATUS, &linked);
+	if (!linked)
+	{
+		//Calculamos una cadena de error
+		GLint logLen;
+		glGetProgramiv(computeProgram, GL_INFO_LOG_LENGTH, &logLen);
+
+		char* logString = new char[logLen];
+		glGetProgramInfoLog(computeProgram, logLen, NULL, logString);
+		std::cout << "Error: " << logString << std::endl;
+		delete[] logString;
+
+		glDeleteProgram(computeProgram);
+		computeProgram = 0;
+		exit(-1);
+	}
+}
+
+void initShaderFw(const char* vname, const char* gname, const char* fname)
 {
 	forwardVShader = loadShader(vname, GL_VERTEX_SHADER);
+	forwardGShader = loadShader(vname, GL_GEOMETRY_SHADER);
 	forwardFShader = loadShader(fname, GL_FRAGMENT_SHADER);
 
 	forwardProgram = glCreateProgram();
 	glAttachShader(forwardProgram, forwardVShader);
+	glAttachShader(forwardProgram, forwardGShader);
 	glAttachShader(forwardProgram, forwardFShader);
 
 	/*
@@ -263,21 +297,48 @@ void initShaderFw(const char* vname, const char* fname)
 	uEmiTex = glGetUniformLocation(forwardProgram, "emiTex");
 
 	inPos = glGetAttribLocation(forwardProgram, "inPos");
-	inNormal = glGetAttribLocation(forwardProgram, "inNormal");
+	inColor = glGetAttribLocation(forwardProgram, "inNormal");
 	inTexCoord = glGetAttribLocation(forwardProgram, "inTexCoord");
 }
 
-void initObj(const char* filename)
+void initParticles(const char* filename)
 {
+	unsigned int nParticles = 20;
+
+	std::vector< glm::vec4 > positions(nParticles, glm::vec4(0));
+	std::vector< glm::vec4 > velocities(nParticles, glm::vec4(0));
+
+	for (int i = 0; i < nParticles; i++)
+	{
+		positions[i] = glm::vec4(rand() / RAND_MAX, rand() / RAND_MAX, rand() / RAND_MAX, 1);
+		velocities[i] = glm::vec4(rand() / RAND_MAX, rand() / RAND_MAX, rand() / RAND_MAX, 1);
+	}
+
+	/////////////////////
+	//Compute
+	/////////////////////
+
+	glGenBuffers(1, &posSSbo);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, posSSbo);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, nParticles *
+		sizeof(glm::vec4), &positions[0], GL_STATIC_DRAW);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, posSSbo);
+
+	glGenBuffers(1, &velSSbo);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, velSSbo);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, nParticles *
+		sizeof(glm::vec4), &velocities[0], GL_STATIC_DRAW);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSbo);
+
+	//////////////////////
+	// Forward
+	/////////////////////
 	// Read our .obj file
 	std::vector< glm::vec3 > vertexes;
 	std::vector< glm::vec2 > uvs;
 	std::vector< glm::vec3 > normals;
 	std::vector <unsigned int> indexes;
 
-	bool res = loadOBJ(filename, vertexes, uvs, normals, indexes);
-
-	unsigned int nVertex = vertexes.size();
 	nVertexIndex = indexes.size();
 
 	glGenVertexArrays(1, &vao);
@@ -285,29 +346,27 @@ void initObj(const char* filename)
 
 	if (inPos != -1)
 	{
-		glGenBuffers(1, &posVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, posVBO);
-		glBufferData(GL_ARRAY_BUFFER, nVertex * sizeof(glm::vec3),
-			&vertexes[0], GL_STATIC_DRAW);
-		glVertexAttribPointer(inPos, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		//Usamos las posiciones calculadas en el shader de computo
+		glBindBuffer(GL_ARRAY_BUFFER, posSSbo);
+		glVertexAttribPointer(inPos, 4, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(inPos);
 	}
 
-	if (inNormal != -1)
+	if (inColor != -1)
 	{
-		glGenBuffers(1, &normalVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
-		glBufferData(GL_ARRAY_BUFFER, nVertex * sizeof(glm::vec3),
+		glGenBuffers(1, &colorVBO);
+		glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
+		glBufferData(GL_ARRAY_BUFFER, nParticles * sizeof(glm::vec3),
 			&normals[0], GL_STATIC_DRAW);
-		glVertexAttribPointer(inNormal, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(inNormal);
+		glVertexAttribPointer(inColor, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glEnableVertexAttribArray(inColor);
 	}
 
 	if (inTexCoord != -1)
 	{
 		glGenBuffers(1, &texCoordVBO);
 		glBindBuffer(GL_ARRAY_BUFFER, texCoordVBO);
-		glBufferData(GL_ARRAY_BUFFER, nVertex * sizeof(glm::vec2),
+		glBufferData(GL_ARRAY_BUFFER, nParticles * sizeof(glm::vec2),
 			&uvs[0], GL_STATIC_DRAW);
 		glVertexAttribPointer(inTexCoord, 2, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(inTexCoord);
@@ -506,7 +565,6 @@ void keyboardFunc(unsigned char key, int x, int y)
 		break;
 	}
 }
-
 
 void mouseFunc(int button, int state, int x, int y)
 {

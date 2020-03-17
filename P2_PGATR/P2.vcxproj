@@ -12,7 +12,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\shaders\fwRendering.frag" />
+    <None Include="..\shaders\fwRendering.geom" />
     <None Include="..\shaders\fwRendering.vert" />
+    <None Include="..\shaders\particleIntegrator.comp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\scr\auxiliar.cpp" />
@@ -64,7 +66,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\libs\include;%(AdditionalIncludeDirectories);$(SolutionDir)..\libs\include;%(AdditionalIncludeDirectories);../libs/include/;%(AdditionalIncludeDirectories);C:\Users\joanv.COMPUTADORJOAN\Documents\Universidad\Master IGV\Universidad\PGATR\Prácticas\P1_PGATR\libs\include;C:\Users\joanv.COMPUTADORJOAN\Documents\Universidad\Master IGV\Universidad\PGATR\Prácticas\P1_PGATR\libs\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\libs\include;%(AdditionalIncludeDirectories);$(SolutionDir)..\libs\include;../libs/include/;A:\Develop\Master\PGTR\RealTime\ComputoYParticulas\libs\include</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>

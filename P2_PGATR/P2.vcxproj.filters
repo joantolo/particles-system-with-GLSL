@@ -15,6 +15,12 @@
     <None Include="..\shaders\fwRendering.vert">
       <Filter>shaders</Filter>
     </None>
+    <None Include="..\shaders\fwRendering.geom">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="..\shaders\particleIntegrator.comp">
+      <Filter>shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\scr\auxiliar.cpp">
