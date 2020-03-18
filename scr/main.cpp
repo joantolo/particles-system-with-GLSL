@@ -29,19 +29,16 @@
 unsigned int vao;
 unsigned int posSSbo;
 unsigned int velSSbo;
-
-//VBOs que forman parte del objeto
-unsigned int posVBO;
-unsigned int colorVBO;
-unsigned int colorVBO;
-unsigned int texCoordVBO;
-unsigned int triangleIndexVBO;
+unsigned int colorSSbo;
 
 ///////////
 //Compute
 ///////////
 unsigned int computeShader;
 unsigned int computeProgram;
+
+const unsigned int nParticles = 20;
+const unsigned int workGroupSize = 2;
 
 ///////////
 //Forward-rendering
@@ -54,21 +51,20 @@ unsigned int forwardProgram;
 //Atributos
 int inPos;
 int inColor;
-int inColor;
-int inTexCoord;
 
 //Matrices Uniform
 int uModelViewMat;
 int uModelViewProjMat;
 int uNormalMat;
+int uProjMat;
 
 //Identificadores de texturas Forward-rendering
 unsigned int colorTexId;
-unsigned int emiTexId;
 
 //Texturas Uniform
 int uColorTex;
-int uEmiTex;
+
+//Posicion de la luz
 int uLightPos;
 
 //////////////////////////////////////////////////////////////
@@ -81,11 +77,7 @@ glm::mat4 view = glm::mat4(1.0f);
 glm::mat4 modelObject = glm::mat4(1.0f);
 glm::mat4 modelLight = glm::mat4(1.0f);
 
-//Variable del modelo
-unsigned int nVertexIndex;
-
 //Control de camara
-float theta = 0.0f;
 float phi = 0.0f;
 bool moveCam;
 int cameraStartingDistance = 5.0f;
@@ -107,7 +99,7 @@ void resizeFunc(int width, int height);
 void idleFunc();
 void keyboardFunc(unsigned char key, int x, int y);
 void mouseFunc(int button, int state, int x, int y);
-void renderObject();
+void renderPraticles();
 
 //Funciones de inicialización y destrucción
 void initContext(int argc, char** argv);
@@ -115,6 +107,7 @@ void initOGL();
 void initShaderCompute(const char* cname);
 void initShaderFw(const char* vname, const char* gname, const char* fname);
 void initParticles(const char* filename);
+float ranf(float, float);
 void destroy();
 
 //Carga el shader indicado, devuele el ID del shader
@@ -132,7 +125,7 @@ int main(int argc, char** argv)
 	initOGL();
 
 	initShaderCompute("../shaders/particleIntegrator.comp");
-	initShaderFw("../shaders/fwRendering.vert", "../shaders/computeRendering.geom", "../shaders/fwRendering.frag");
+	initShaderFw("../shaders/fwRendering.vert", "../shaders/fwRendering.geom", "../shaders/fwRendering.frag");
 
 	initParticles("../models/box.obj");
 
@@ -156,6 +149,7 @@ void initContext(int argc, char** argv)
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
 	glutInitWindowSize(SCREEN_SIZE);
 	glutInitWindowPosition(0, 0);
+
 	glutCreateWindow("Prácticas PGATR");
 
 	glewExperimental = GL_TRUE;
@@ -209,17 +203,15 @@ void destroy()
 	glDeleteShader(forwardGShader);
 	glDeleteProgram(forwardProgram);
 
-	if (inPos != -1) glDeleteBuffers(1, &posVBO);
-	if (inColor != -1) glDeleteBuffers(1, &colorVBO);
-	if (inColor != -1) glDeleteBuffers(1, &colorVBO);
-	if (inTexCoord != -1) glDeleteBuffers(1, &texCoordVBO);
+	glDetachShader(computeProgram, computeShader);
+	glDeleteShader(computeShader);
 
-	glDeleteBuffers(1, &triangleIndexVBO);
+	if (inPos != -1) glDeleteBuffers(1, &posSSbo);
+	if (inColor != -1) glDeleteBuffers(1, &colorSSbo);
 
 	glDeleteVertexArrays(1, &vao);
 
 	glDeleteTextures(1, &colorTexId);
-	glDeleteTextures(1, &emiTexId);
 }
 
 void initShaderCompute(const char* cname)
@@ -253,20 +245,13 @@ void initShaderCompute(const char* cname)
 void initShaderFw(const char* vname, const char* gname, const char* fname)
 {
 	forwardVShader = loadShader(vname, GL_VERTEX_SHADER);
-	forwardGShader = loadShader(vname, GL_GEOMETRY_SHADER);
+	forwardGShader = loadShader(gname, GL_GEOMETRY_SHADER);
 	forwardFShader = loadShader(fname, GL_FRAGMENT_SHADER);
 
 	forwardProgram = glCreateProgram();
 	glAttachShader(forwardProgram, forwardVShader);
 	glAttachShader(forwardProgram, forwardGShader);
 	glAttachShader(forwardProgram, forwardFShader);
-
-	/*
-	glBindAttribLocation(forwardProgram, 0, "inPos");
-	glBindAttribLocation(forwardProgram, 1, "inColor");
-	glBindAttribLocation(forwardProgram, 2, "inNormal");
-	glBindAttribLocation(forwardProgram, 3, "inTexCoord");
-	*/
 
 	glLinkProgram(forwardProgram);
 
@@ -288,36 +273,34 @@ void initShaderFw(const char* vname, const char* gname, const char* fname)
 		exit(-1);
 	}
 
+	uProjMat = glGetUniformLocation(forwardProgram, "proj");
 	uNormalMat = glGetUniformLocation(forwardProgram, "normal");
 	uModelViewMat = glGetUniformLocation(forwardProgram, "modelView");
 	uModelViewProjMat = glGetUniformLocation(forwardProgram, "modelViewProj");
 	uLightPos = glGetUniformLocation(forwardProgram, "lpos");
 
 	uColorTex = glGetUniformLocation(forwardProgram, "colorTex");
-	uEmiTex = glGetUniformLocation(forwardProgram, "emiTex");
 
 	inPos = glGetAttribLocation(forwardProgram, "inPos");
-	inColor = glGetAttribLocation(forwardProgram, "inNormal");
-	inTexCoord = glGetAttribLocation(forwardProgram, "inTexCoord");
+	inColor = glGetAttribLocation(forwardProgram, "inColor");
 }
 
 void initParticles(const char* filename)
 {
-	unsigned int nParticles = 20;
-
 	std::vector< glm::vec4 > positions(nParticles, glm::vec4(0));
 	std::vector< glm::vec4 > velocities(nParticles, glm::vec4(0));
+	std::vector< glm::vec4 > colors(nParticles, glm::vec4(0));
 
 	for (int i = 0; i < nParticles; i++)
 	{
-		positions[i] = glm::vec4(rand() / RAND_MAX, rand() / RAND_MAX, rand() / RAND_MAX, 1);
-		velocities[i] = glm::vec4(rand() / RAND_MAX, rand() / RAND_MAX, rand() / RAND_MAX, 1);
+		positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);
+		velocities[i] = glm::vec4(ranf(-2, 2), ranf(-2, 2), ranf(-2, 2), 0);
+		colors[i] = glm::vec4(ranf(0, 1), ranf(0, 1), ranf(0, 1), 0.6);
 	}
 
 	/////////////////////
 	//Compute
 	/////////////////////
-
 	glGenBuffers(1, &posSSbo);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, posSSbo);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, nParticles *
@@ -330,58 +313,39 @@ void initParticles(const char* filename)
 		sizeof(glm::vec4), &velocities[0], GL_STATIC_DRAW);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, velSSbo);
 
+	glGenBuffers(1, &colorSSbo);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, colorSSbo);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, nParticles *
+		sizeof(glm::vec4), &colors[0], GL_STATIC_DRAW);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, colorSSbo);
+
 	//////////////////////
 	// Forward
 	/////////////////////
-	// Read our .obj file
-	std::vector< glm::vec3 > vertexes;
-	std::vector< glm::vec2 > uvs;
-	std::vector< glm::vec3 > normals;
-	std::vector <unsigned int> indexes;
-
-	nVertexIndex = indexes.size();
-
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
 	if (inPos != -1)
 	{
-		//Usamos las posiciones calculadas en el shader de computo
 		glBindBuffer(GL_ARRAY_BUFFER, posSSbo);
 		glVertexAttribPointer(inPos, 4, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(inPos);
 	}
 
+	
 	if (inColor != -1)
 	{
-		glGenBuffers(1, &colorVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
-		glBufferData(GL_ARRAY_BUFFER, nParticles * sizeof(glm::vec3),
-			&normals[0], GL_STATIC_DRAW);
-		glVertexAttribPointer(inColor, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, colorSSbo);
+		glVertexAttribPointer(inColor, 4, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(inColor);
 	}
 
-	if (inTexCoord != -1)
-	{
-		glGenBuffers(1, &texCoordVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, texCoordVBO);
-		glBufferData(GL_ARRAY_BUFFER, nParticles * sizeof(glm::vec2),
-			&uvs[0], GL_STATIC_DRAW);
-		glVertexAttribPointer(inTexCoord, 2, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(inTexCoord);
-	}
 
-	glGenBuffers(1, &triangleIndexVBO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangleIndexVBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-		nVertexIndex * sizeof(unsigned int), &indexes[0],
-		GL_STATIC_DRAW);
+	glBindVertexArray(0);
 
 	modelObject = glm::mat4(1.0f);
 
 	colorTexId = loadTex("../img/map_tex.png");
-	emiTexId = loadTex("../img/emissive.png");
 }
 
 GLuint loadShader(const char* fileName, GLenum type)
@@ -453,6 +417,19 @@ void renderFunc()
 	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glBlendFunc(GL_CONSTANT_COLOR, GL_CONSTANT_ALPHA);
+	//glBlendColor(0.5f, 0.5f, 0.5f, 0.6f);
+	glBlendEquation(GL_FUNC_ADD);
+
+	///////////
+	//Compute-rendering
+	///////////
+	glUseProgram(computeProgram);
+	glDispatchCompute(nParticles / workGroupSize, 1, 1);
+	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
 	///////////
 	//Forward-rendering
 	///////////
@@ -466,13 +443,6 @@ void renderFunc()
 		glUniform1i(uColorTex, 0);
 	}
 
-	if (uEmiTex != -1)
-	{
-		glActiveTexture(GL_TEXTURE0 + 1);
-		glBindTexture(GL_TEXTURE_2D, emiTexId);
-		glUniform1i(uEmiTex, 1);
-	}
-
 	if (uLightPos != -1)
 	{
 		glm::vec3 lpos = (view * modelLight) * lightPos;
@@ -480,16 +450,19 @@ void renderFunc()
 	}
 
 	//Dibujado de objeto
-	renderObject();
+	renderPraticles();
 
 	glutSwapBuffers();
 }
 
-void renderObject()
+void renderPraticles()
 {
 	glm::mat4 modelView = view * modelObject;
 	glm::mat4 modelViewProj = proj * view * modelObject;
 	glm::mat4 normal = glm::transpose(glm::inverse(modelView));
+
+	if (uProjMat != -1)
+		glUniformMatrix4fv(uProjMat, 1, GL_FALSE, &(proj[0][0]));
 
 	if (uModelViewMat != -1)
 		glUniformMatrix4fv(uModelViewMat, 1, GL_FALSE, &(modelView[0][0]));
@@ -501,8 +474,8 @@ void renderObject()
 		glUniformMatrix4fv(uNormalMat, 1, GL_FALSE, &(normal[0][0]));
 
 	glBindVertexArray(vao);
-
-	glDrawElements(GL_TRIANGLES, nVertexIndex, GL_UNSIGNED_INT, (void*)0);
+	glDrawArrays(GL_POINTS, 0, nParticles);
+	glBindVertexArray(0);
 }
 
 void resizeFunc(int width, int height)
@@ -523,14 +496,8 @@ void idleFunc()
 			phi += 0.02f;
 			view = glm::rotate(view, 0.02f, glm::vec3(0, 1, 0));
 		}
-		else if (theta < M_2PI)
-		{
-			theta += 0.02f;
-			view = glm::rotate(view, 0.02f, glm::vec3(1, 0, 0));
-		}
 		else
 		{
-			theta = 0.0f;
 			phi = 0.0f;
 		}
 	}
@@ -564,6 +531,11 @@ void keyboardFunc(unsigned char key, int x, int y)
 	case('Q'):
 		break;
 	}
+}
+
+float ranf(float min, float max)
+{
+	return ( min + (static_cast <float> (rand()) / static_cast <float> (RAND_MAX)) * (max - min) );
 }
 
 void mouseFunc(int button, int state, int x, int y)

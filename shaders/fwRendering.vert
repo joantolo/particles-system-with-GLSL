@@ -1,22 +1,19 @@
 #version 330 core
 
-in vec3 inPos;	
-in vec2 inTexCoord;
-in vec3 inNormal;
+in vec4 inPos;	
+in vec4 inColor;
 
 uniform mat4 normal;
 uniform mat4 modelViewProj;
 uniform mat4 modelView;
 
-out vec3 vPos;
-out vec3 vNorm;
-out vec2 vTexCoord;
+out vec4 vPos;
+out vec4 vColor;
 
 void main()
 {
-	vTexCoord = inTexCoord;
-	vNorm = (normal * vec4(inNormal, 0.0)).xyz;
-	vPos = (modelView * vec4(inPos, 1)).xyz;
+	vColor = inColor;
+	vPos = modelView * inPos;
 	
-	gl_Position = modelViewProj * vec4 (inPos, 1.0);
+	gl_Position = modelView * inPos;
 }

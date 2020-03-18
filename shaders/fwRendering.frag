@@ -1,9 +1,9 @@
 #version 330 core
 out vec4 outColor;
 
-in vec3 vPos;
-in vec3 vNorm;
-in vec2 vTexCoord;
+in vec4 gPos;
+in vec2 gTexCoord;
+in vec4 gColor;
 
 //Propiedades del objeto
 vec3 Ka;
@@ -28,15 +28,19 @@ uniform sampler2D emiTex;
 
 void main()
 {
-	Ka = texture(colorTex, vTexCoord).rgb;
-	Kd = texture(colorTex, vTexCoord).rgb;
-	Ke = texture(emiTex, vTexCoord).rgb;
+	if ( length(gTexCoord - 0.5) > 0.38 ) discard;
+
+	/*
+	Ka = texture(colorTex, gTexCoord).rgb;
+	Kd = texture(colorTex, gTexCoord).rgb;
+	Ke = texture(emiTex, gTexCoord).rgb;
 	Ks = vec3 (1.0);
 
-	N = vNorm;
-	pos = vPos;
+	N = gNorm;
+	pos = gPos;
+	*/
 
-	outColor = vec4(shade(), 1.0);
+	outColor = gColor;
 }
 
 vec3 shade()
