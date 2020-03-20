@@ -35,9 +35,16 @@ unsigned int colorSSbo;
 //Compute
 ///////////
 unsigned int computeShader;
+unsigned int sortingShader;
 unsigned int computeProgram;
+unsigned int sortingComputeProgram;
 
-const unsigned int nParticles = 20;
+//Uniforms
+int locStage;
+int locSubStage;
+int uSortingModelViewMat;
+
+const unsigned int nParticles = 4;
 const unsigned int workGroupSize = 2;
 
 ///////////
@@ -104,6 +111,7 @@ void renderPraticles();
 //Funciones de inicialización y destrucción
 void initContext(int argc, char** argv);
 void initOGL();
+void intShaderSortingCompute(const char* cname);
 void initShaderCompute(const char* cname);
 void initShaderFw(const char* vname, const char* gname, const char* fname);
 void initParticles(const char* filename);
@@ -124,6 +132,7 @@ int main(int argc, char** argv)
 	initContext(argc, argv);
 	initOGL();
 
+	intShaderSortingCompute("../shaders/sortingShader.comp");
 	initShaderCompute("../shaders/particleIntegrator.comp");
 	initShaderFw("../shaders/fwRendering.vert", "../shaders/fwRendering.geom", "../shaders/fwRendering.frag");
 
@@ -206,12 +215,47 @@ void destroy()
 	glDetachShader(computeProgram, computeShader);
 	glDeleteShader(computeShader);
 
+	glDetachShader(sortingComputeProgram, sortingShader);
+	glDeleteShader(sortingShader);
+
 	if (inPos != -1) glDeleteBuffers(1, &posSSbo);
 	if (inColor != -1) glDeleteBuffers(1, &colorSSbo);
 
 	glDeleteVertexArrays(1, &vao);
 
 	glDeleteTextures(1, &colorTexId);
+}
+
+void intShaderSortingCompute(const char* cname)
+{
+	sortingShader = loadShader(cname, GL_COMPUTE_SHADER);
+
+	sortingComputeProgram = glCreateProgram();
+	glAttachShader(sortingComputeProgram, sortingShader);
+
+	glLinkProgram(sortingComputeProgram);
+
+	int linked;
+	glGetProgramiv(sortingComputeProgram, GL_LINK_STATUS, &linked);
+	if (!linked)
+	{
+		//Calculamos una cadena de error
+		GLint logLen;
+		glGetProgramiv(sortingComputeProgram, GL_INFO_LOG_LENGTH, &logLen);
+
+		char* logString = new char[logLen];
+		glGetProgramInfoLog(sortingComputeProgram, logLen, NULL, logString);
+		std::cout << "Error: " << logString << std::endl;
+		delete[] logString;
+
+		glDeleteProgram(sortingComputeProgram);
+		sortingComputeProgram = 0;
+		exit(-1);
+	}
+	
+	uSortingModelViewMat = glGetUniformLocation(sortingComputeProgram, "modelView");
+	locStage = glGetAttribLocation(sortingComputeProgram, "stage");
+	locSubStage = glGetAttribLocation(sortingComputeProgram, "subStage");
 }
 
 void initShaderCompute(const char* cname)
@@ -293,7 +337,7 @@ void initParticles(const char* filename)
 
 	for (int i = 0; i < nParticles; i++)
 	{
-		positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);
+		positions[i] = glm::vec4(-3 + ((float)i / nParticles) * 4.0f, 1.0f, -3 + ((float)i / nParticles) * 4.0f, 1);//positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);
 		velocities[i] = glm::vec4(ranf(-2, 2), ranf(-2, 2), ranf(-2, 2), 0);
 		colors[i] = glm::vec4(ranf(0, 1), ranf(0, 1), ranf(0, 1), 0.6);
 	}
@@ -419,13 +463,29 @@ void renderFunc()
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	//glBlendFunc(GL_CONSTANT_COLOR, GL_CONSTANT_ALPHA);
-	//glBlendColor(0.5f, 0.5f, 0.5f, 0.6f);
 	glBlendEquation(GL_FUNC_ADD);
 
 	///////////
 	//Compute-rendering
 	///////////
+	glUseProgram(sortingComputeProgram);
+
+	if (uSortingModelViewMat != -1) glUniformMatrix4fv(uSortingModelViewMat, 1, GL_FALSE, &((view * modelObject)[0][0]));
+
+	int stages = log2(nParticles);
+	for (int stage = 0; stage < stages; ++stage) 
+	{
+		if (locStage != -1) glUniform1i(locStage, stage);
+
+		for (int subStage = 0; subStage < stage + 1; ++subStage)
+		{
+			if (locSubStage != -1) glUniform1i(locSubStage, subStage);
+
+			glDispatchCompute(nParticles / workGroupSize, 1, 1);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		}
+	}
+
 	glUseProgram(computeProgram);
 	glDispatchCompute(nParticles / workGroupSize, 1, 1);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);

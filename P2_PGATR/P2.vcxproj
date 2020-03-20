@@ -15,6 +15,7 @@
     <None Include="..\shaders\fwRendering.geom" />
     <None Include="..\shaders\fwRendering.vert" />
     <None Include="..\shaders\particleIntegrator.comp" />
+    <None Include="..\shaders\sortingShader.comp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\scr\auxiliar.cpp" />

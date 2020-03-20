@@ -21,6 +21,9 @@
     <None Include="..\shaders\particleIntegrator.comp">
       <Filter>shaders</Filter>
     </None>
+    <None Include="..\shaders\sortingShader.comp">
+      <Filter>shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\scr\auxiliar.cpp">
