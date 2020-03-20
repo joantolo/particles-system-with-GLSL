@@ -28,6 +28,7 @@ void main()
 	bool sortIncreasing = true;
 	uint threadId = gid;
 
+
 	// Determine where to conduct the bitonic split
 	// by locating the middle-point of this 1D array
 	uint distanceBetweenPairs = 1 << (stage - subStage);
@@ -49,39 +50,59 @@ void main()
 	 if((threadId/sameDirectionBlockWidth) % 2 == 1)
 		sortIncreasing = !sortIncreasing;
 
-	 vec4 greater;
-	 vec4 lesser;
+	 vec4 greaterPos;
+	 vec4 lesserPos;	
+	 
+	 vec4 greaterVel;
+	 vec4 lesserVel;
+	 
+	 vec4 greaterCol;
+	 vec4 lesserCol;
 
 	 // perform pairwise comparison between two elements and depending
 	 // whether its to build the bitonic that is monotically increasing
 	 // and decreasing.
 	 if(leftElement > rightElement) 
 	 {
-		 greater = Positions[leftId];
-		 lesser = Positions[rightId];
+		 greaterPos = Positions[leftId];
+		 greaterVel = Velocities[leftId];
+		 greaterCol = Colors[leftId];
+
+		 lesserPos = Positions[rightId];
+		 lesserVel = Velocities[rightId];
+		 lesserCol = Colors[rightId];
 	 }
 	 else
 	 {
-		 greater = Positions[rightId];
-		 lesser = Positions[leftId];
+		 greaterPos = Positions[rightId];
+		 greaterVel = Velocities[rightId];
+		 greaterCol = Colors[rightId];
+
+		 lesserPos = Positions[leftId];
+		 lesserVel = Velocities[leftId];
+		 lesserCol = Colors[leftId];
 	 }
 
 	 if(sortIncreasing)
 	 {
-		 Positions[leftId] = lesser;
-		 Positions[rightId] = greater;
+		 Positions[leftId] = lesserPos;
+		 Velocities[leftId] = lesserVel;
+		 Colors[leftId] = lesserCol;
+
+		 Positions[rightId] = greaterPos;
+		 Velocities[rightId] = greaterVel;
+		 Colors[rightId] = greaterCol;
+		 
 	 } 
 	 else 
 	 {
-		 Positions[leftId] = greater;
-		 Positions[rightId] = lesser;
+		 Positions[leftId] = greaterPos;
+		 Velocities[leftId] = greaterVel;
+		 Colors[leftId] = greaterCol;
+
+		 Positions[rightId] = lesserPos;
+		 Velocities[rightId] = lesserVel;
+		 Colors[rightId] = lesserCol;
 	 }
 
-	//vec4 p = Positions[gid];
-	//vec4 vel = Velocities[gid];
-	//vec4 col = Colors[gid];
-
-	//Positions[gl_GlobalInvocationID.x] = vec4(1.0, 0.0, 0.0, 0.0);
-	//Velocities[gl_GlobalInvocationID.x] = vel;
-	//Colors[gl_GlobalInvocationID.x] = col;
 }
