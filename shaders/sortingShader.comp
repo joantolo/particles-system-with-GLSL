@@ -28,7 +28,6 @@ void main()
 	bool sortIncreasing = true;
 	uint threadId = gid;
 
-
 	// Determine where to conduct the bitonic split
 	// by locating the middle-point of this 1D array
 	uint distanceBetweenPairs = 1 << (stage - subStage);

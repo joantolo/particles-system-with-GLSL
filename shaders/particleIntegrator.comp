@@ -16,77 +16,85 @@ layout( std140, binding = 2 ) buffer Col {
 };
 
 layout( std140, binding = 3 ) buffer Time {
-   float particleLifeTime[ ];
+   int ParticleLifeTime[ ];
 };
 
 layout (local_size_x = SIZE_X, local_size_y = SIZE_Y) in;
 
 vec4 g = vec4(0.0, -9.8, 0.0, 0.0);
-vec4 a = vec4(0.0, 10, 0.0, 0.0);
-const float dt = 0.001;
 
-const int totalLifeTime=6;
+const float dt = 0.003;
 
-const int minParticleSize=10;
-const int maxParticleSize=200;
+const int maxParticleLife = 2000;
 
 uniform int simulationType;
-uniform float runningTime;
+uniform int runningTime;
 
 //Indice de la particula a integr
 uint gid = gl_GlobalInvocationID.x;
 
 void main()
 {
+	vec4 pos;
 	vec4 p = Positions[gid];
 	vec4 vel = Velocities[gid];
 	vec4 col = Colors[gid];
-	float timeParticle = particleLifeTime[gid];
-	vec4 pos;
+	int particleLife = ParticleLifeTime[gid];
 
-	//Marbles 
-	if(simulationType == 0)
+	switch(simulationType)
 	{
-		//col = col - dt * 100;
-/*
-		vel += g * dt;
-		 pos = p + vel * dt;
+		///////////////////
+		// Marbles 
+		///////////////////
+		case(0):
 
-
-		if(pos.y < -1.0)
-		{
-			vel = reflect(vel, vec4(0.0, 1.0, 0.0, 0.0)) * 0.9;
+			vel += g * dt;
 			pos = p + vel * dt;
-		}*/
 
+		break;
 
-		float age= runningTime - timeParticle;
-		if(runningTime >= (col.x))
-		{
-			float currentAge= age/totalLifeTime;
-			col.w = 1.0 - currentAge;
-			//gl_PointSize= mix(minParticleSize, maxParticleSize, currentAge);
-		}
-		vel += a * dt;
-		pos = p + vel * dt;
+		///////////////////
+		// Fontain
+		///////////////////
+		case(1):
+
+			if(particleLife <= 1)
+			{
+				pos = vec4(0.0, 0.0, 0.0, 1.0);
+				vel.y = col.r * 10;
+				vel.x = mix(-2.0, 2.0, col.g);
+				vel.z = mix(-2.0, 2.0, col.b);
+				particleLife = maxParticleLife;
+			}
+			else
+			{
+				particleLife -= runningTime;
+
+				vel += g * dt;
+				pos = p + vel * dt;
+
+				col.w = float(particleLife) / float(maxParticleLife);
+			}
+
+		break;
+
+		case(2):
+		//Aquí se puede hacer algo
+
+		break;
 	}
-	else
+
+
+
+	if(pos.y < -1.0)
 	{
-		col= vec4(1,0,0,1);
-		float age= runningTime - timeParticle;
-		if(runningTime >= (col.x))
-		{
-			float currentAge= age/totalLifeTime;
-			col.w = 1.0 - currentAge;
-			//gl_PointSize= mix(minParticleSize, maxParticleSize, currentAge);
-		}
-		vel += a * dt;
+		vel = reflect(vel, vec4(0.0, 1.0, 0.0, 0.0)) * 0.9;
 		pos = p + vel * dt;
-
+		pos.y = -1.0;
 	}
 
-
-	Positions[gl_GlobalInvocationID.x] = pos;
-	Velocities[gl_GlobalInvocationID.x] = vel;
-	Colors[gl_GlobalInvocationID.x] = col;
+	ParticleLifeTime[gid] = particleLife;
+	Positions[gid] = pos;
+	Velocities[gid] = vel;
+	Colors[gid] = col;
 }

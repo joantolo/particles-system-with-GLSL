@@ -49,10 +49,16 @@ int uSortingModelViewMat;
 int uSimType;
 int uRunningTime;
 
-const unsigned int nParticles = 1048576; //2^20
+//const unsigned int nParticles = 1048576; //2^20
+const unsigned int nParticles = 16384; //2^14
 const unsigned int workGroupSize = 512;
-unsigned int simType = 1;
-float runningTime;
+int simType = 0;
+int stages;
+
+//Variables de tiempo
+int startProgramTime;
+int runningTime;
+
 
 ///////////
 //Forward-rendering
@@ -103,8 +109,6 @@ float projNear, projFar;
 //Posicion de la luz
 glm::vec4 lightPos;
 
-//Variables de tiempo
-float startProgramTime;
 
 //////////////////////////////////////////////////////////////
 // Funciones auxiliares
@@ -212,6 +216,7 @@ void initOGL()
 	moveCam = false;
 
 	startProgramTime = clock();
+	stages = log2(nParticles);
 }
 
 void destroy()
@@ -349,14 +354,16 @@ void initParticles(const char* filename)
 	std::vector< glm::vec4 > positions(nParticles, glm::vec4(0));
 	std::vector< glm::vec4 > velocities(nParticles, glm::vec4(0));
 	std::vector< glm::vec4 > colors(nParticles, glm::vec4(0));
-	std::vector< float > timePerParticle(nParticles, 0.);
+	std::vector< int > timePerParticle(nParticles, 0);
 
 	for (int i = 0; i < nParticles; i++)
 	{
-		positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);//positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);
-		//positions[i] = glm::vec4(-3 + ((float)i / nParticles) * 4.0f, 1.0f, -3 + ((float)i / nParticles) * 4.0f, 1);//positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);
+		//positions[i] = glm::vec4(2*std::sin(M_2PI*float(i)/float(nParticles)), 0, 2 * std::cos(M_2PI * float(i) / float(nParticles)), 1);
+		positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);
+		//positions[i] = glm::vec4(-3 + ((float)i / nParticles) * 4.0f, 1.0f, -3 + ((float)i / nParticles) * 4.0f, 1);
 		velocities[i] = glm::vec4(ranf(-2, 2), ranf(-2, 2), ranf(-2, 2), 0);
 		colors[i] = glm::vec4(ranf(0, 1), ranf(0, 1), ranf(0, 1), 0.6);
+		timePerParticle[i] = (int) ranf(0, 2000);
 	}
 
 	/////////////////////
@@ -384,7 +391,7 @@ void initParticles(const char* filename)
 	glGenBuffers(1, &timeSSbo);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, timeSSbo);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, nParticles *
-		sizeof(float), &timePerParticle[0], GL_STATIC_DRAW);
+		sizeof(int), &timePerParticle[0], GL_STATIC_DRAW);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, timeSSbo);
 
 	//////////////////////
@@ -480,7 +487,6 @@ unsigned int loadTex(const char* fileName)
 
 void renderFunc()
 {
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glEnable(GL_BLEND);
@@ -488,22 +494,15 @@ void renderFunc()
 	glBlendEquation(GL_FUNC_ADD);
 
 	///////////
-	//Compute-rendering
+	//Compute-sorting-rendering
 	///////////
 	glUseProgram(sortingComputeProgram);
-
-	runningTime = clock() - startProgramTime;
 
 	if (uSortingModelViewMat != -1)
 		glUniformMatrix4fv(uSortingModelViewMat, 1, GL_FALSE, &((view * modelObject)[0][0]));
 
-	if (uSimType != -1)
-		glUniform1i(uSimType, simType);
 
-	if (uRunningTime != -1)
-		glUniform1f(uRunningTime, runningTime);
-
-	int stages = log2(nParticles);
+	
 	for (int stage = 0; stage < stages; ++stage)
 	{
 		if (uStage != -1)
@@ -519,7 +518,21 @@ void renderFunc()
 		}
 	}
 
+	///////////
+	//Compute-integrator-rendering
+	///////////
 	glUseProgram(computeProgram);
+
+	runningTime = clock() - startProgramTime;
+	startProgramTime = clock();
+
+	if (uSimType != -1)
+		glUniform1i(uSimType, simType);
+
+
+	if (uRunningTime != -1)
+		glUniform1i(uRunningTime, runningTime);
+
 	glDispatchCompute(nParticles / workGroupSize, 1, 1);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -622,6 +635,7 @@ void keyboardFunc(unsigned char key, int x, int y)
 		break;
 	case('q'):
 	case('Q'):
+		simType = (simType + 1) % 3;
 		break;
 	}
 }
