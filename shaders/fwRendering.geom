@@ -12,7 +12,7 @@ out vec4 gColor;
 
 uniform mat4 proj;
 
-float billboardSize = 0.02;
+float billboardSize = 0.2;
 
 void main()
 {

@@ -16,6 +16,8 @@
 #include <iostream>
 #include <cstdlib>
 
+#include <chrono>
+
 #define RAND_SEED 31415926
 #define M_2PI 6.28318530718
 #define M_PI 3.14159265359
@@ -30,6 +32,7 @@ unsigned int vao;
 unsigned int posSSbo;
 unsigned int velSSbo;
 unsigned int colorSSbo;
+unsigned int timeSSbo;
 
 ///////////
 //Compute
@@ -40,12 +43,16 @@ unsigned int computeProgram;
 unsigned int sortingComputeProgram;
 
 //Uniforms
-int locStage;
-int locSubStage;
+int uStage;
+int uSubStage;
 int uSortingModelViewMat;
+int uSimType;
+int uRunningTime;
 
 const unsigned int nParticles = 1048576; //2^20
-const unsigned int workGroupSize = 256;
+const unsigned int workGroupSize = 512;
+unsigned int simType = 1;
+float runningTime;
 
 ///////////
 //Forward-rendering
@@ -95,6 +102,9 @@ float projNear, projFar;
 
 //Posicion de la luz
 glm::vec4 lightPos;
+
+//Variables de tiempo
+float startProgramTime;
 
 //////////////////////////////////////////////////////////////
 // Funciones auxiliares
@@ -200,6 +210,8 @@ void initOGL()
 	//Inicializamos la cámara
 	view = glm::lookAt(glm::vec3(0, 0, cameraStartingDistance), glm::vec3(0), glm::vec3(0, 1, 0));
 	moveCam = false;
+
+	startProgramTime = clock();
 }
 
 void destroy()
@@ -253,8 +265,8 @@ void intShaderSortingCompute(const char* cname)
 		exit(-1);
 	}
 
-	locStage = glGetUniformLocation(sortingComputeProgram, "stage");
-	locSubStage = glGetUniformLocation(sortingComputeProgram, "subStage");
+	uStage = glGetUniformLocation(sortingComputeProgram, "stage");
+	uSubStage = glGetUniformLocation(sortingComputeProgram, "subStage");
 	uSortingModelViewMat = glGetUniformLocation(sortingComputeProgram, "modelView");
 }
 
@@ -284,6 +296,9 @@ void initShaderCompute(const char* cname)
 		computeProgram = 0;
 		exit(-1);
 	}
+
+	uSimType = glGetUniformLocation(computeProgram, "simulationType");
+	uRunningTime = glGetUniformLocation(computeProgram, "runningTime");
 }
 
 void initShaderFw(const char* vname, const char* gname, const char* fname)
@@ -334,6 +349,7 @@ void initParticles(const char* filename)
 	std::vector< glm::vec4 > positions(nParticles, glm::vec4(0));
 	std::vector< glm::vec4 > velocities(nParticles, glm::vec4(0));
 	std::vector< glm::vec4 > colors(nParticles, glm::vec4(0));
+	std::vector< float > timePerParticle(nParticles, 0.);
 
 	for (int i = 0; i < nParticles; i++)
 	{
@@ -363,6 +379,13 @@ void initParticles(const char* filename)
 	glBufferData(GL_SHADER_STORAGE_BUFFER, nParticles *
 		sizeof(glm::vec4), &colors[0], GL_STATIC_DRAW);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, colorSSbo);
+
+	//time
+	glGenBuffers(1, &timeSSbo);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, timeSSbo);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, nParticles *
+		sizeof(float), &timePerParticle[0], GL_STATIC_DRAW);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, timeSSbo);
 
 	//////////////////////
 	// Forward
@@ -469,18 +492,27 @@ void renderFunc()
 	///////////
 	glUseProgram(sortingComputeProgram);
 
-	if (uSortingModelViewMat != -1) glUniformMatrix4fv(uSortingModelViewMat, 1, GL_FALSE, &((view * modelObject)[0][0]));
+	runningTime = clock() - startProgramTime;
+
+	if (uSortingModelViewMat != -1)
+		glUniformMatrix4fv(uSortingModelViewMat, 1, GL_FALSE, &((view * modelObject)[0][0]));
+
+	if (uSimType != -1)
+		glUniform1i(uSimType, simType);
+
+	if (uRunningTime != -1)
+		glUniform1f(uRunningTime, runningTime);
 
 	int stages = log2(nParticles);
 	for (int stage = 0; stage < stages; ++stage)
 	{
-		if (locStage != -1)
-			glUniform1i(locStage, stage);
+		if (uStage != -1)
+			glUniform1i(uStage, stage);
 
 		for (int subStage = 0; subStage < stage + 1; ++subStage)
 		{
-			if (locSubStage != -1)
-				glUniform1i(locSubStage, subStage);
+			if (uSubStage != -1)
+				glUniform1i(uSubStage, subStage);
 
 			glDispatchCompute(nParticles / workGroupSize, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
