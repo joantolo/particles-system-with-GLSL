@@ -51,6 +51,7 @@ int uRunningTime;
 
 //const unsigned int nParticles = 1048576; //2^20
 const unsigned int nParticles = 16384; //2^14
+//const unsigned int nParticles = 1024; //2^10
 const unsigned int workGroupSize = 512;
 int simType = 0;
 int stages;
@@ -496,12 +497,13 @@ void renderFunc()
 	///////////
 	//Compute-sorting-rendering
 	///////////
+
+	auto startCompute = std::chrono::steady_clock::now();
+
 	glUseProgram(sortingComputeProgram);
 
 	if (uSortingModelViewMat != -1)
 		glUniformMatrix4fv(uSortingModelViewMat, 1, GL_FALSE, &((view * modelObject)[0][0]));
-
-
 	
 	for (int stage = 0; stage < stages; ++stage)
 	{
@@ -529,16 +531,20 @@ void renderFunc()
 	if (uSimType != -1)
 		glUniform1i(uSimType, simType);
 
-
 	if (uRunningTime != -1)
 		glUniform1i(uRunningTime, runningTime);
 
 	glDispatchCompute(nParticles / workGroupSize, 1, 1);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+	auto endCompute = std::chrono::steady_clock::now();
+
 	///////////
 	//Forward-rendering
 	///////////
+
+	auto startRender = std::chrono::steady_clock::now();
+
 	glUseProgram(forwardProgram);
 
 	//Texturas del forward-rendering
@@ -557,6 +563,12 @@ void renderFunc()
 
 	//Dibujado de objeto
 	renderPraticles();
+
+	auto endRender = std::chrono::steady_clock::now();
+
+	std::cout << "time elapsed R / C: " 
+		<< std::chrono::duration_cast<std::chrono::microseconds>(endRender - startRender).count() << " / "
+		<< std::chrono::duration_cast<std::chrono::microseconds>(endCompute - startCompute).count() << std::endl;
 
 	glutSwapBuffers();
 }
