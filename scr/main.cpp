@@ -100,7 +100,7 @@ glm::mat4 modelLight = glm::mat4(1.0f);
 //Control de camara
 float phi = 0.0f;
 bool moveCam;
-int cameraStartingDistance = 5.0f;
+float cameraStartingDistance = 7.0f;
 float cameraStep = 3.0f;
 
 //Variables near y far

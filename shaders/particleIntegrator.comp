@@ -25,6 +25,8 @@ vec4 g = vec4(0.0, -9.8, 0.0, 0.0);
 
 const float dt = 0.003;
 
+const float dimCube = 1.5;
+
 const int maxParticleLife = 2000;
 
 uniform int simulationType;
@@ -50,6 +52,41 @@ void main()
 
 			vel += g * dt;
 			pos = p + vel * dt;
+			
+			if(pos.y < -dimCube)
+			{
+				vel = reflect(vel, vec4(0.0, 1.0, 0.0, 0.0)) * 0.9;
+				pos = p + vel * dt;
+				pos.y = -dimCube;
+			}
+
+			if(pos.z < -dimCube)
+			{
+				vel = reflect(vel, vec4(0.0, 0.0, -1.0, 0.0)) * 0.9;
+				pos = p + vel * dt;
+				pos.z = -dimCube;
+			}
+
+			if(pos.z > dimCube)
+			{
+				vel = reflect(vel, vec4(0.0, 0.0, 1.0, 0.0)) * 0.9;
+				pos = p + vel * dt;
+				pos.z = dimCube;
+			}
+
+			if(pos.x < -dimCube)
+			{
+				vel = reflect(vel, vec4(1.0, 0.0, 0.0, 0.0)) * 0.9;
+				pos = p + vel * dt;
+				pos.x = -dimCube;
+			}
+
+			if(pos.x > dimCube)
+			{
+				vel = reflect(vel, vec4(-1.0, 0.0, 0.0, 0.0)) * 0.9;
+				pos = p + vel * dt;
+				pos.x = dimCube;
+			}
 
 		break;
 
@@ -78,19 +115,47 @@ void main()
 
 		break;
 
+		///////////////////
+		// Three Fountains
+		///////////////////
 		case(2):
-		//Aquí se puede hacer algo
 
+		if(particleLife <= 1)
+			{
+				switch(gid % 3)
+				{
+					case(0):
+						pos = vec4(-3.0, 2.0, 0.0, 1.0);
+						vel.x = abs(mix(-2.0, 2.0, col.g) * 2.0);
+
+					break;
+
+					case(1):
+						pos = vec4(0.0, 2.0, 0.0, 1.0);
+						vel.x = mix(-2.0, 2.0, col.g) * 2.0;
+					break;
+
+					case(2):
+						pos = vec4(3.0, 2.0, 0.0, 1.0);
+						vel.x = -abs(mix(-2.0, 2.0, col.g) * 2.0);
+					break;
+				}
+
+				vel.y = -col.r * 10;
+				
+				vel.z = mix(-2.0, 2.0, col.b);
+				particleLife = maxParticleLife;
+			}
+			else
+			{
+				particleLife -= runningTime;
+
+				vel += g * dt;
+				pos = p + vel * dt;
+
+				col.w = float(particleLife) / float(maxParticleLife);
+			}
 		break;
-	}
-
-
-
-	if(pos.y < -1.0)
-	{
-		vel = reflect(vel, vec4(0.0, 1.0, 0.0, 0.0)) * 0.9;
-		pos = p + vel * dt;
-		pos.y = -1.0;
 	}
 
 	ParticleLifeTime[gid] = particleLife;
