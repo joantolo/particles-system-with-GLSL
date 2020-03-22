@@ -51,7 +51,8 @@ int uRunningTime;
 
 //const unsigned int nParticles = 1048576; //2^20
 //const unsigned int nParticles = 16384; //2^14
-const unsigned int nParticles = 4194304; //2^14
+//const unsigned int nParticles = 4194304; //2^14
+const unsigned int nParticles = 32768; //2^14
 //const unsigned int nParticles = 1024; //2^10
 const unsigned int workGroupSize = 512;
 int simType = 0;
@@ -60,7 +61,6 @@ int stages;
 //Variables de tiempo
 int startProgramTime;
 int runningTime;
-
 
 ///////////
 //Forward-rendering
@@ -111,7 +111,8 @@ float projNear, projFar;
 //Posicion de la luz
 glm::vec4 lightPos;
 
-
+std::vector<float> renderTimeValues;
+std::vector<float> computeTimeValues;
 //////////////////////////////////////////////////////////////
 // Funciones auxiliares
 //////////////////////////////////////////////////////////////
@@ -134,7 +135,7 @@ void initParticles(const char* filename);
 float ranf(float, float);
 void destroy();
 
-void addTimerQuery(std::string debugStr);
+void addTimerQuery(std::string debugStr, bool isCompute);
 
 //Carga el shader indicado, devuele el ID del shader
 GLuint loadShader(const char* fileName, GLenum type);
@@ -221,6 +222,9 @@ void initOGL()
 
 	startProgramTime = clock();
 	stages = log2(nParticles);
+
+	renderTimeValues = std::vector<float>();
+	computeTimeValues = std::vector<float>();
 }
 
 void destroy()
@@ -534,7 +538,7 @@ void renderFunc()
 	glDispatchCompute(nParticles / workGroupSize, 1, 1);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-	addTimerQuery("Tiempo de cómputo: ");
+	addTimerQuery("Tiempo de cómputo: ", true);
 
 	///////////
 	//Forward-rendering
@@ -560,7 +564,7 @@ void renderFunc()
 
 	//Dibujado de objeto
 	renderParticles();
-	addTimerQuery("Tiempo de render: ");
+	addTimerQuery("Tiempo de render: ", false);
 
 	glutSwapBuffers();
 }
@@ -653,7 +657,7 @@ void mouseFunc(int button, int state, int x, int y)
 {
 }
 
-void addTimerQuery(std::string debugStr)
+void addTimerQuery(std::string debugStr, bool isCompute)
 {
 	GLuint64 timer, timer2;
 	GLint64 timer1;
@@ -680,5 +684,31 @@ void addTimerQuery(std::string debugStr)
 	glGetQueryObjectui64v(query, GL_QUERY_RESULT, &timer2);
 
 	timer = (timer2 - timer1);
-	std::cout << debugStr << timer / 1000000.0 << "ms" << std::endl;
+
+	if (isCompute)
+	{
+		computeTimeValues.push_back(timer);
+		if (computeTimeValues.size() % 100 == 0)
+		{
+			float averageTime = 0;
+			for (int i = 0; i < computeTimeValues.size(); i++)
+			{
+				averageTime += computeTimeValues[i];
+			}
+			std::cout << debugStr << (averageTime / computeTimeValues.size()) / 1000000.0 << "ms" << std::endl;
+		}
+	}
+	else
+	{
+		renderTimeValues.push_back(timer);
+		if (renderTimeValues.size() % 100 == 0)
+		{
+			float averageTime = 0;
+			for (int i = 0; i < renderTimeValues.size(); i++)
+			{
+				averageTime += renderTimeValues[i];
+			}
+			std::cout << debugStr << (averageTime / renderTimeValues.size()) / 1000000.0 << "ms" << std::endl;
+		}
+	}
 }
