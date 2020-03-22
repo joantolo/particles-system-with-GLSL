@@ -1,5 +1,5 @@
 #version 430
-#define SIZE_X 512
+#define SIZE_X 32
 #define SIZE_Y 1
 
 

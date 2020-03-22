@@ -49,12 +49,8 @@ int uSortingModelViewMat;
 int uSimType;
 int uRunningTime;
 
-//const unsigned int nParticles = 1048576; //2^20
-//const unsigned int nParticles = 16384; //2^14
-//const unsigned int nParticles = 4194304; //2^14
-const unsigned int nParticles = 32768; //2^14
-//const unsigned int nParticles = 1024; //2^10
-const unsigned int workGroupSize = 512;
+const unsigned int nParticles = 131072; //2^17
+const unsigned int workGroupSize = 32;
 int simType = 0;
 int stages;
 
@@ -366,9 +362,7 @@ void initParticles(const char* filename)
 
 	for (int i = 0; i < nParticles; i++)
 	{
-		//positions[i] = glm::vec4(2*std::sin(M_2PI*float(i)/float(nParticles)), 0, 2 * std::cos(M_2PI * float(i) / float(nParticles)), 1);
 		positions[i] = glm::vec4(ranf(-2, 2), ranf(0, 2), ranf(-2, 2), 1);
-		//positions[i] = glm::vec4(-3 + ((float)i / nParticles) * 4.0f, 1.0f, -3 + ((float)i / nParticles) * 4.0f, 1);
 		velocities[i] = glm::vec4(ranf(-2, 2), ranf(-2, 2), ranf(-2, 2), 0);
 		colors[i] = glm::vec4(ranf(0, 1), ranf(0, 1), ranf(0, 1), 0.6);
 		timePerParticle[i] = (int)ranf(0, 2000);
@@ -529,6 +523,9 @@ void renderFunc()
 	///////////
 	glUseProgram(computeProgram);
 
+	runningTime = clock() - startProgramTime;
+	startProgramTime = clock();
+
 	if (uSimType != -1)
 		glUniform1i(uSimType, simType);
 
@@ -564,6 +561,7 @@ void renderFunc()
 
 	//Dibujado de objeto
 	renderParticles();
+
 	addTimerQuery("Tiempo de render: ", false);
 
 	glutSwapBuffers();
@@ -688,7 +686,7 @@ void addTimerQuery(std::string debugStr, bool isCompute)
 	if (isCompute)
 	{
 		computeTimeValues.push_back(timer);
-		if (computeTimeValues.size() % 100 == 0)
+		if (computeTimeValues.size() % 1000 == 0)
 		{
 			float averageTime = 0;
 			for (int i = 0; i < computeTimeValues.size(); i++)
@@ -701,7 +699,7 @@ void addTimerQuery(std::string debugStr, bool isCompute)
 	else
 	{
 		renderTimeValues.push_back(timer);
-		if (renderTimeValues.size() % 100 == 0)
+		if (renderTimeValues.size() % 1000 == 0)
 		{
 			float averageTime = 0;
 			for (int i = 0; i < renderTimeValues.size(); i++)

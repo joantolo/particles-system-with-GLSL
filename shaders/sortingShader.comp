@@ -1,5 +1,5 @@
 #version 430
-#define SIZE_X 512
+#define SIZE_X 32
 #define SIZE_Y 1
 
 layout( std140, binding = 0 ) buffer Pos {
@@ -20,7 +20,9 @@ uniform int stage;
 uniform int subStage;
 uniform mat4 modelView;
 
-//Indice de la particula a integr
+//Algoritmo adaptado de OpenCL Parallel Programming Development Cookbook de Raymond Tay
+
+//Indice de la particula a integrar
 uint gid = gl_GlobalInvocationID.x;
 
 void main()
@@ -30,22 +32,23 @@ void main()
 
 	// Determine where to conduct the bitonic split
 	// by locating the middle-point of this 1D array
+	// Recuerda 1 << a = 2^a
 	uint distanceBetweenPairs = 1 << (stage - subStage);
 	uint blockWidth = 2 * distanceBetweenPairs;
 
-	// Determine the left and right indexes to data referencing
-	uint leftId = (threadId % distanceBetweenPairs) + (threadId / distanceBetweenPairs) * blockWidth;
-	uint rightId = leftId + distanceBetweenPairs;
+	// Determine the left and right indexes to the data
+	uint leftIndex = (threadId % distanceBetweenPairs) + (threadId / distanceBetweenPairs) * blockWidth;
+	uint rightIndex = leftIndex + distanceBetweenPairs;
 
-	float leftElement = (modelView * Positions[leftId]).z;//data[leftId];
-	float rightElement = (modelView * Positions[rightId]).z;//data[rightId];
+	float leftElement = (modelView * Positions[leftIndex]).z;
+	float rightElement = (modelView * Positions[rightIndex]).z;
 
-
-	 // Threads are divided into blocks of size
-	 // 2^sameDirectionBlockWidth
+	 // Threads are divided into blocks of size 2^sameDirectionBlockWidth
 	 // and its used to build bitonic subsequences s.t the sorting is
 	 // monotically increasing on the left and decreasing on the right
 	 uint sameDirectionBlockWidth = 1 << stage;
+
+	 //Cambia la direccion
 	 if((threadId/sameDirectionBlockWidth) % 2 == 1)
 		sortIncreasing = !sortIncreasing;
 
@@ -63,45 +66,45 @@ void main()
 	 // and decreasing.
 	 if(leftElement > rightElement) 
 	 {
-		 greaterPos = Positions[leftId];
-		 greaterVel = Velocities[leftId];
-		 greaterCol = Colors[leftId];
+		 greaterPos = Positions[leftIndex];
+		 greaterVel = Velocities[leftIndex];
+		 greaterCol = Colors[leftIndex];
 
-		 lesserPos = Positions[rightId];
-		 lesserVel = Velocities[rightId];
-		 lesserCol = Colors[rightId];
+		 lesserPos = Positions[rightIndex];
+		 lesserVel = Velocities[rightIndex];
+		 lesserCol = Colors[rightIndex];
 	 }
 	 else
 	 {
-		 greaterPos = Positions[rightId];
-		 greaterVel = Velocities[rightId];
-		 greaterCol = Colors[rightId];
+		 greaterPos = Positions[rightIndex];
+		 greaterVel = Velocities[rightIndex];
+		 greaterCol = Colors[rightIndex];
 
-		 lesserPos = Positions[leftId];
-		 lesserVel = Velocities[leftId];
-		 lesserCol = Colors[leftId];
+		 lesserPos = Positions[leftIndex];
+		 lesserVel = Velocities[leftIndex];
+		 lesserCol = Colors[leftIndex];
 	 }
 
 	 if(sortIncreasing)
 	 {
-		 Positions[leftId] = lesserPos;
-		 Velocities[leftId] = lesserVel;
-		 Colors[leftId] = lesserCol;
+		 Positions[leftIndex] = lesserPos;
+		 Velocities[leftIndex] = lesserVel;
+		 Colors[leftIndex] = lesserCol;
 
-		 Positions[rightId] = greaterPos;
-		 Velocities[rightId] = greaterVel;
-		 Colors[rightId] = greaterCol;
+		 Positions[rightIndex] = greaterPos;
+		 Velocities[rightIndex] = greaterVel;
+		 Colors[rightIndex] = greaterCol;
 		 
 	 } 
 	 else 
 	 {
-		 Positions[leftId] = greaterPos;
-		 Velocities[leftId] = greaterVel;
-		 Colors[leftId] = greaterCol;
+		 Positions[leftIndex] = greaterPos;
+		 Velocities[leftIndex] = greaterVel;
+		 Colors[leftIndex] = greaterCol;
 
-		 Positions[rightId] = lesserPos;
-		 Velocities[rightId] = lesserVel;
-		 Colors[rightId] = lesserCol;
+		 Positions[rightIndex] = lesserPos;
+		 Velocities[rightIndex] = lesserVel;
+		 Colors[rightIndex] = lesserCol;
 	 }
 
 }
