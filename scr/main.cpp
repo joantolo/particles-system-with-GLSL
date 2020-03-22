@@ -50,7 +50,8 @@ int uSimType;
 int uRunningTime;
 
 //const unsigned int nParticles = 1048576; //2^20
-const unsigned int nParticles = 16384; //2^14
+//const unsigned int nParticles = 16384; //2^14
+const unsigned int nParticles = 4194304; //2^14
 //const unsigned int nParticles = 1024; //2^10
 const unsigned int workGroupSize = 512;
 int simType = 0;
@@ -121,7 +122,7 @@ void resizeFunc(int width, int height);
 void idleFunc();
 void keyboardFunc(unsigned char key, int x, int y);
 void mouseFunc(int button, int state, int x, int y);
-void renderPraticles();
+void renderParticles();
 
 //Funciones de inicialización y destrucción
 void initContext(int argc, char** argv);
@@ -132,6 +133,8 @@ void initShaderFw(const char* vname, const char* gname, const char* fname);
 void initParticles(const char* filename);
 float ranf(float, float);
 void destroy();
+
+void addTimerQuery(std::string debugStr);
 
 //Carga el shader indicado, devuele el ID del shader
 GLuint loadShader(const char* fileName, GLenum type);
@@ -364,7 +367,7 @@ void initParticles(const char* filename)
 		//positions[i] = glm::vec4(-3 + ((float)i / nParticles) * 4.0f, 1.0f, -3 + ((float)i / nParticles) * 4.0f, 1);
 		velocities[i] = glm::vec4(ranf(-2, 2), ranf(-2, 2), ranf(-2, 2), 0);
 		colors[i] = glm::vec4(ranf(0, 1), ranf(0, 1), ranf(0, 1), 0.6);
-		timePerParticle[i] = (int) ranf(0, 2000);
+		timePerParticle[i] = (int)ranf(0, 2000);
 	}
 
 	/////////////////////
@@ -497,14 +500,11 @@ void renderFunc()
 	///////////
 	//Compute-sorting-rendering
 	///////////
-
-	auto startCompute = std::chrono::steady_clock::now();
-
 	glUseProgram(sortingComputeProgram);
 
 	if (uSortingModelViewMat != -1)
 		glUniformMatrix4fv(uSortingModelViewMat, 1, GL_FALSE, &((view * modelObject)[0][0]));
-	
+
 	for (int stage = 0; stage < stages; ++stage)
 	{
 		if (uStage != -1)
@@ -525,9 +525,6 @@ void renderFunc()
 	///////////
 	glUseProgram(computeProgram);
 
-	runningTime = clock() - startProgramTime;
-	startProgramTime = clock();
-
 	if (uSimType != -1)
 		glUniform1i(uSimType, simType);
 
@@ -537,7 +534,7 @@ void renderFunc()
 	glDispatchCompute(nParticles / workGroupSize, 1, 1);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-	auto endCompute = std::chrono::steady_clock::now();
+	addTimerQuery("Tiempo de cómputo: ");
 
 	///////////
 	//Forward-rendering
@@ -562,18 +559,13 @@ void renderFunc()
 	}
 
 	//Dibujado de objeto
-	renderPraticles();
-
-	auto endRender = std::chrono::steady_clock::now();
-
-	std::cout << "time elapsed R / C: " 
-		<< std::chrono::duration_cast<std::chrono::microseconds>(endRender - startRender).count() << " / "
-		<< std::chrono::duration_cast<std::chrono::microseconds>(endCompute - startCompute).count() << std::endl;
+	renderParticles();
+	addTimerQuery("Tiempo de render: ");
 
 	glutSwapBuffers();
 }
 
-void renderPraticles()
+void renderParticles()
 {
 	glm::mat4 modelView = view * modelObject;
 	glm::mat4 modelViewProj = proj * view * modelObject;
@@ -659,4 +651,34 @@ float ranf(float min, float max)
 
 void mouseFunc(int button, int state, int x, int y)
 {
+}
+
+void addTimerQuery(std::string debugStr)
+{
+	GLuint64 timer, timer2;
+	GLint64 timer1;
+	unsigned int query;
+	int done = 0;
+
+	glGenQueries(1, &query);
+
+	// start a query to determine when all previous
+	// comands are completed
+	glQueryCounter(query, GL_TIMESTAMP);
+
+	// get the current time
+	glGetInteger64v(GL_TIMESTAMP, &timer1);
+
+	// wait until the query results are available
+	while (!done) {
+		glGetQueryObjectiv(query,
+			GL_QUERY_RESULT_AVAILABLE,
+			&done);
+	}
+
+	// get the query results
+	glGetQueryObjectui64v(query, GL_QUERY_RESULT, &timer2);
+
+	timer = (timer2 - timer1);
+	std::cout << debugStr << timer / 1000000.0 << "ms" << std::endl;
 }
